@@ -1,0 +1,7 @@
+*.pyc
+__pycache__/
+.ipynb_checkpoints
+.DS_Store
+myvenv/
+faces/
+MLHW_6/
