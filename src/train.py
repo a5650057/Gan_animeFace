@@ -87,9 +87,13 @@ class TrainerGAN():
         Use this function to train generator and discriminator
         """
         self.prepare_environment()
-        
+
+        stop_training = False  # 标记是否停止训练
         
         for e, epoch in enumerate(range(self.config["n_epoch"])):
+            if stop_training:
+                break  # 如果需要停止训练，则跳出循环
+
             progress_bar = tqdm(self.dataloader)
             progress_bar.set_description(f"Epoch {e+1}")
             for i, data in enumerate(progress_bar):
@@ -127,9 +131,10 @@ class TrainerGAN():
                 loss_D = (r_loss + f_loss) / 2
 
                 # Discriminator backwarding
-                self.D.zero_grad()
-                loss_D.backward()
-                self.opt_D.step()
+                if loss_D.item() > 0.1:
+                    self.D.zero_grad()
+                    loss_D.backward()
+                    self.opt_D.step()
 
                 """
                 NOTE FOR SETTING WEIGHT CLIP:
@@ -164,18 +169,19 @@ class TrainerGAN():
                     loss_G = self.loss(f_logit, r_label)
 
                     # Generator backwarding
-                    self.G.zero_grad()
-                    loss_G.backward()
-                    self.opt_G.step()
+                    if loss_G.item() > 1e-5:    
+                        self.G.zero_grad()
+                        loss_G.backward()
+                        self.opt_G.step()
                     
                 if self.steps % 10 == 0:
                     progress_bar.set_postfix(loss_G=loss_G.item(), loss_D=loss_D.item())
                 self.steps += 1
 
              # Check generator and discriminator loss for early stopping
-            if loss_G.item() < 1e-5 and loss_D.item() <= 2.0:
-                logging.info("Generator loss below 1e-5 and Discriminator loss below 2.0. Stopping training.")
-                break
+            if loss_G.item() <= 1e-5 and loss_D.item() <= 2:
+                stop_training = True
+                break  # 跳出当前epoch的循环
 
             self.G.eval() 
             f_imgs_sample = (self.G(self.z_samples).data + 1) / 2.0
@@ -187,7 +193,6 @@ class TrainerGAN():
             grid_img = torchvision.utils.make_grid(f_imgs_sample.cpu(), nrow=10)
             plt.figure(figsize=(10,10))
             plt.imshow(grid_img.permute(1, 2, 0))
-            plt.show()
             plt.close()
 
             self.G.train()
